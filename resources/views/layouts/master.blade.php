@@ -14,7 +14,7 @@
     <div id="toast"></div>
 
     @auth
-        <div class="app-layout" id="app-layout">
+        <div class="app-layout active" id="app-layout">
             @include('inc.sidebar')
 
             <div class="main-content">
@@ -30,21 +30,12 @@
                 </div>
             </div>
         </div>
+    @else
+        @yield('content')
     @endauth
-    <!-- LANDING PAGE -->
-    @include('pages.lda.main')
 
-    <!-- REGISTER PAGE -->
-    @include('auth.register')
-
-    <!-- LOGIN PAGE -->
-    @include('auth.login')
-
-    <!-- APP LAYOUT -->
-    @include('demo.demo')
-
-<script src="{{ asset('js/finances-init.js') }}"></script>
-@stack('scripts')
+    <script src="{{ asset('js/state.js') }}"></script>
+    @stack('scripts')
 
 </body>
 </html>

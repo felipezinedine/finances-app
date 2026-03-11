@@ -1,239 +1,26 @@
-// ============================================================
-// STATE
-// ============================================================
-let state = {
-  users: [],
-  currentUser: null,
-  balance: 0,
-  transactions: [],
-  investments: [],
-  goals: [],
-  accounts: [],
-  categories: [],
-  invoices: [],
-};
-
-let selectedTxType = 'receita';
-let selectedCatType = 'receita';
-let selectedCatColor = '#7c5cfc';
-let selectedCatEmoji = '💰';
-
-// ============================================================
-// INIT
-// ============================================================
-window.onload = () => {
-  loadState();
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('tx-date').value = today;
-  document.getElementById('inv-date').value = today;
-  document.getElementById('upd-inv-date').value = today;
-};
-
-function loadState() {
-  try {
-    const saved = localStorage.getItem('finflow_state');
-    if (saved) {
-      state = { ...state, ...JSON.parse(saved) };
-    }
-  } catch(e) {}
-}
-
-function saveState() {
-  try {
-    localStorage.setItem('finflow_state', JSON.stringify(state));
-  } catch(e) {}
-}
-
-// ============================================================
-// NAVIGATION
-// ============================================================
-function goTo(pageId) {
-  document.querySelectorAll('.page, .auth-page').forEach(p => {
-    p.classList.remove('active');
-    p.style.display = '';
-  });
-  document.getElementById('app-layout').classList.remove('active');
-  document.getElementById('app-layout').style.display = '';
-  const target = document.getElementById(pageId);
-  if (target) {
-    target.style.display = 'flex';
-    target.classList.add('active');
-  }
-}
-
-function showApp() {
-  document.querySelectorAll('.page, .auth-page').forEach(p => {
-    p.classList.remove('active');
-    p.style.display = '';
-  });
-  document.getElementById('app-layout').classList.add('active');
-  document.getElementById('app-layout').style.display = 'flex';
-  showPage('dashboard');
-  updateUserUI();
-}
-
-function showPage(name) {
-  document.querySelectorAll('.inner-page').forEach(p => p.classList.remove('active'));
-  const target = document.getElementById('page-' + name);
-  if (target) target.classList.add('active');
-
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => {
-    if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'" + name + "'")) {
-      n.classList.add('active');
-    }
-  });
-
-  const titles = {
-    dashboard: 'Dashboard',
-    transactions: 'Transações',
-    invoices: 'Faturas',
-    investments: 'Investimentos',
-    goals: 'Metas',
-    accounts: 'Contas',
-    categories: 'Categorias',
-    reports: 'Relatórios',
-  };
-  document.getElementById('topbar-title').textContent = titles[name] || name;
-
-  // Render pages
-  if (name === 'dashboard') renderDashboard();
-  if (name === 'transactions') renderTransactions();
-  if (name === 'investments') renderInvestments();
-  if (name === 'goals') renderGoals();
-  if (name === 'accounts') renderAccounts();
-  if (name === 'categories') renderCategories();
-  if (name === 'invoices') renderInvoices();
-  if (name === 'reports') renderReports();
-}
-
-function updateUserUI() {
-  if (!state.currentUser) return;
-  const u = state.currentUser;
-  const initials = ((u.name || 'U')[0] + (u.lastname || '')[0]).toUpperCase();
-  document.getElementById('sidebar-avatar').textContent = initials;
-  document.getElementById('sidebar-name').textContent = u.name + ' ' + (u.lastname || '');
-  document.getElementById('sidebar-email').textContent = u.email;
-}
-
-// ============================================================
-// AUTH
-// ============================================================
-function register() {
-  const name = document.getElementById('reg-name').value.trim();
-  const lastname = document.getElementById('reg-lastname').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const pass = document.getElementById('reg-pass').value;
-  const balanceVal = parseFloat(document.getElementById('reg-balance').value) || 0;
-
-  const alertEl = document.getElementById('reg-alert');
-  if (!name || !email || !pass) {
-    alertEl.style.display = 'flex';
-    alertEl.className = 'alert alert-error';
-    alertEl.textContent = '⚠️ Preencha todos os campos obrigatórios';
-    return;
-  }
-  if (state.users.find(u => u.email === email)) {
-    alertEl.style.display = 'flex';
-    alertEl.className = 'alert alert-error';
-    alertEl.textContent = '⚠️ Este e-mail já está cadastrado';
-    return;
-  }
-  const user = { id: uid(), name, lastname, email, pass };
-  state.users.push(user);
-  state.currentUser = user;
-  state.balance = balanceVal;
-  state.transactions = [];
-  state.investments = [];
-  state.goals = [];
-  state.accounts = [{ id: uid(), name: 'Carteira Principal', bank: 'Geral', type: 'carteira', balance: balanceVal }];
-  state.categories = getDefaultCategories();
-  state.invoices = [];
-  saveState();
-  showToast('Conta criada com sucesso! 🎉', 'success');
-  showApp();
-}
-
-function login() {
-  const email = document.getElementById('login-email').value.trim();
-  const pass = document.getElementById('login-pass').value;
-  const alertEl = document.getElementById('login-alert');
-
-  const user = state.users.find(u => u.email === email && u.pass === pass);
-  if (!user) {
-    alertEl.style.display = 'flex';
-    alertEl.className = 'alert alert-error';
-    alertEl.textContent = '⚠️ E-mail ou senha incorretos';
-    return;
-  }
-  state.currentUser = user;
-  saveState();
-  showToast('Bem-vindo de volta! 👋', 'success');
-  showApp();
-}
-
 function demoLogin() {
-  // Create demo user if not exists
-  let demo = state.users.find(u => u.email === 'demo@finflow.com');
-  if (!demo) {
-    demo = { id: uid(), name: 'Demo', lastname: 'User', email: 'demo@finflow.com', pass: 'demo' };
-    state.users.push(demo);
-    state.currentUser = demo;
-    state.balance = 15000;
-    state.categories = getDefaultCategories();
-    state.accounts = [
-      { id: 'acc1', name: 'Conta Corrente', bank: 'Nubank', type: 'corrente', balance: 8500 },
-      { id: 'acc2', name: 'Poupança', bank: 'Caixa', type: 'poupanca', balance: 6500 },
-    ];
-    state.transactions = getSampleTransactions();
-    state.investments = getSampleInvestments();
-    state.goals = getSampleGoals();
-    state.invoices = getSampleInvoices();
-  } else {
-    state.currentUser = demo;
-  }
+  // Sempre recria o estado demo do zero para garantir dados frescos e consistentes
+  // Remove usuário demo anterior se existir
+  state.users = state.users.filter(u => u.email !== 'demo@finflow.com');
+
+  const demo = { id: 'demo-user', name: 'Demo', lastname: 'User', email: 'demo@finflow.com', pass: 'demo' };
+  state.users.push(demo);
+  state.currentUser = demo;
+  state.balance = 15000;
+  state.categories = getDefaultCategories();
+  state.accounts = [
+    { id: 'acc1', name: 'Conta Corrente', bank: 'Nubank', type: 'corrente', balance: 8500 },
+    { id: 'acc2', name: 'Poupança', bank: 'Caixa', type: 'poupanca', balance: 6500 },
+  ];
+  // Gera dados de exemplo já com as categorias e contas acima definidas
+  state.transactions = getSampleTransactions();
+  state.investments = getSampleInvestments();
+  state.goals = getSampleGoals();
+  state.invoices = getSampleInvoices();
+
   saveState();
   showToast('Entrou com conta demo 🚀', 'info');
   showApp();
-}
-
-function logout() {
-  state.currentUser = null;
-  saveState();
-  goTo('landing-page');
-}
-
-// ============================================================
-// UTILITIES
-// ============================================================
-function uid() { return Math.random().toString(36).substr(2, 9); }
-
-function fmt(val) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
-}
-
-function fmtDate(d) {
-  if (!d) return '';
-  const dt = new Date(d + 'T00:00:00');
-  return dt.toLocaleDateString('pt-BR');
-}
-
-function showToast(msg, type = 'info') {
-  const toast = document.getElementById('toast');
-  const item = document.createElement('div');
-  item.className = `toast-item toast-${type}`;
-  item.textContent = msg;
-  toast.appendChild(item);
-  setTimeout(() => item.remove(), 3000);
-}
-
-function openModal(id) {
-  // Populate selects
-  populateSelects();
-  document.getElementById(id).classList.add('active');
-}
-function closeModal(id) {
-  document.getElementById(id).classList.remove('active');
 }
 
 function populateSelects() {
@@ -324,11 +111,9 @@ function saveTransaction() {
   if (!desc || !amount || !date) { showToast('Preencha todos os campos', 'error'); return; }
 
   if (editId) {
-    // Edit existing
     const idx = state.transactions.findIndex(t => t.id === editId);
     if (idx !== -1) {
       const old = state.transactions[idx];
-      // Reverse old effect
       reverseBalanceEffect(old);
       state.transactions[idx] = { ...old, desc, amount, date, catId, accId, note, type };
       applyBalanceEffect(state.transactions[idx]);
@@ -409,7 +194,7 @@ function renderTransactions() {
   const filterType = document.getElementById('tx-filter-type')?.value || '';
   const filterCat = document.getElementById('tx-filter-cat')?.value || '';
 
-  let txs = state.transactions.filter(tx => {
+  const txs = state.transactions.filter(tx => {
     const matchSearch = !search || tx.desc.toLowerCase().includes(search);
     const matchType = !filterType || tx.type === filterType;
     const matchCat = !filterCat || tx.catId === filterCat;
@@ -433,7 +218,7 @@ function renderTransactions() {
     const acc = state.accounts.find(a => a.id === tx.accId);
     const typeClass = { receita: 'badge-green', despesa: 'badge-red', investimento: 'badge-gold' }[tx.type];
     const typeLabel = { receita: '💰 Receita', despesa: '💸 Despesa', investimento: '📈 Investimento' }[tx.type];
-    const amtClass = tx.type === 'receita' ? 'style="color:var(--green)"' : 'style="color:var(--red)"';
+    const amtStyle = tx.type === 'receita' ? 'style="color:var(--green)"' : 'style="color:var(--red)"';
     const amtSign = tx.type === 'receita' ? '+' : '-';
     return `<tr>
       <td><div style="font-weight:600">${tx.desc}</div>${tx.note ? `<div class="text-xs" style="color:var(--text3)">${tx.note}</div>` : ''}</td>
@@ -441,7 +226,7 @@ function renderTransactions() {
       <td>${cat ? `<span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:${cat.color};flex-shrink:0"></span>${cat.icon} ${cat.name}</span>` : '<span style="color:var(--text3)">—</span>'}</td>
       <td style="color:var(--text2)">${fmtDate(tx.date)}</td>
       <td style="color:var(--text2)">${acc ? acc.name : '—'}</td>
-      <td ${amtClass} style="font-weight:700;font-family:'Syne',sans-serif">${amtSign}${fmt(tx.amount)}</td>
+      <td ${amtStyle} style="font-weight:700;font-family:'Syne',sans-serif">${amtSign}${fmt(tx.amount)}</td>
       <td>
         <div style="display:flex;gap:4px">
           <button class="btn btn-ghost btn-icon btn-sm" onclick="editTransaction('${tx.id}')" title="Editar">✏️</button>
@@ -468,7 +253,7 @@ function saveInvestment() {
   state.investments.push(inv);
   state.balance -= amount;
 
-  // Also add as transaction
+  // Registra também como transação para aparecer no histórico
   state.transactions.unshift({ id: uid(), desc: `Investimento: ${name}`, amount, date, type: 'investimento', catId: '', accId, note: type });
 
   saveState();
@@ -489,13 +274,15 @@ function updateInvestmentValue() {
 
   const inv = state.investments.find(i => i.id === id);
   if (!inv) return;
+
+  // Atualiza apenas o valor de mercado — NÃO afeta saldo em conta
   inv.currentValue = val;
   inv.history = inv.history || [];
   inv.history.push({ date, value: val });
 
   saveState();
   closeModal('modal-update-invest');
-  showToast('Valor atualizado ✅', 'success');
+  showToast('Valor de mercado atualizado ✅', 'success');
   renderInvestments();
 }
 
@@ -628,10 +415,11 @@ function renderGoals() {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">🎯</div><div class="empty-title">Nenhuma meta criada</div><div class="empty-desc">Crie sua primeira meta financeira!</div></div>`;
     return;
   }
-  grid.innerHTML = goals.map(g => {
+  // Cores fixas por índice para evitar re-render aleatório
+  const colorOptions = ['accent', 'green', 'gold', 'blue'];
+  grid.innerHTML = goals.map((g, idx) => {
     const pct = Math.min((g.current / g.target) * 100, 100);
-    const colors = ['accent', 'green', 'gold', 'blue'];
-    const color = colors[Math.floor(Math.random() * colors.length)];
+    const color = colorOptions[idx % colorOptions.length];
     const done = pct >= 100;
     return `<div class="goal-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
@@ -647,7 +435,7 @@ function renderGoals() {
         <span class="goal-current">${fmt(g.current)}</span>
         <span class="goal-target">de ${fmt(g.target)}</span>
       </div>
-      <div class="progress-bar"><div class="progress-fill ${done ? 'green' : 'accent'}" style="width:${pct}%"></div></div>
+      <div class="progress-bar"><div class="progress-fill ${done ? 'green' : color}" style="width:${pct}%"></div></div>
       <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12px;color:var(--text3)">
         <span>${pct.toFixed(0)}% concluído</span>
         <span>Falta: ${fmt(Math.max(g.target - g.current, 0))}</span>
@@ -808,7 +596,16 @@ function markInvoicePaid(id) {
   if (!inv) return;
   inv.status = 'pago';
   state.balance -= inv.amount;
-  state.transactions.unshift({ id: uid(), desc: `Fatura: ${inv.desc}`, amount: inv.amount, date: new Date().toISOString().split('T')[0], type: 'despesa', catId: inv.catId, accId: '', note: 'Fatura paga' });
+  state.transactions.unshift({
+    id: uid(),
+    desc: `Fatura: ${inv.desc}`,
+    amount: inv.amount,
+    date: new Date().toISOString().split('T')[0],
+    type: 'despesa',
+    catId: inv.catId,
+    accId: '',
+    note: 'Fatura paga',
+  });
   saveState();
   showToast('Fatura marcada como paga ✅', 'success');
   renderInvoices();
@@ -986,7 +783,6 @@ function renderRecentTransactions() {
     return;
   }
   list.innerHTML = txs.map(tx => {
-    const typeClass = { receita: 'badge-green', despesa: 'badge-red', investimento: 'badge-gold' }[tx.type];
     const amtColor = tx.type === 'receita' ? 'var(--green)' : 'var(--red)';
     const amtSign = tx.type === 'receita' ? '+' : '-';
     return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
@@ -1030,7 +826,6 @@ function renderReports() {
   const totalD = txs.filter(t => t.type === 'despesa').reduce((s, t) => s + t.amount, 0);
   const totalI = (state.investments || []).reduce((s, i) => s + (i.currentValue || i.invested), 0);
 
-  // Bar chart receita vs despesa
   const maxVal = Math.max(totalR, totalD, 1);
   document.getElementById('report-chart-1').innerHTML = `
     <div style="display:flex;gap:24px;align-items:flex-end;height:160px;padding:10px 0">
@@ -1052,12 +847,10 @@ function renderReports() {
     </div>
   `;
 
-  // Reuse donut
   const donutEl = document.getElementById('report-donut');
   donutEl.innerHTML = '';
   const wrapper = document.createElement('div');
   wrapper.className = 'donut-wrap';
-  wrapper.id = 'report-donut-inner';
   donutEl.appendChild(wrapper);
   const cats = state.categories || [];
   const despTxs = txs.filter(t => t.type === 'despesa');
@@ -1069,9 +862,11 @@ function renderReports() {
     return { name: c?.name || 'Outros', icon: c?.icon || '💸', color: c?.color || '#666', val };
   }).sort((a, b) => b.val - a.val).slice(0, 5);
 
-  if (!items.length) { donutEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-desc">Sem dados</div></div>'; }
-  else {
-    let angle = 0, cx = 60, cy = 60, r = 48, inner = 24;
+  if (!items.length) {
+    donutEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-desc">Sem dados</div></div>';
+  } else {
+    let angle = 0;
+    const cx = 60, cy = 60, r = 48, inner = 24;
     let paths = '';
     const colors = ['#7c5cfc', '#22c98a', '#f04060', '#f5b942', '#3a9df8'];
     items.forEach((item, i) => {
@@ -1094,7 +889,6 @@ function renderReports() {
     wrapper.innerHTML = `<svg width="120" height="120" viewBox="0 0 120 120">${paths}</svg><div class="donut-legend" style="font-size:12px">${legend}</div>`;
   }
 
-  // Patrimônio
   document.getElementById('report-chart-2').innerHTML = `
     <div style="padding:20px 0">
       <div style="display:flex;justify-content:space-between;margin-bottom:16px">
@@ -1105,7 +899,6 @@ function renderReports() {
     </div>
   `;
 
-  // Resumo anual
   const saldo = totalR - totalD;
   document.getElementById('report-summary').innerHTML = `
     <div style="display:flex;flex-direction:column;gap:12px;padding-top:4px">
@@ -1131,44 +924,49 @@ function renderReports() {
 // ============================================================
 function getDefaultCategories() {
   return [
-    { id: uid(), name: 'Salário', type: 'receita', icon: '💼', color: '#22c98a' },
-    { id: uid(), name: 'Freelance', type: 'receita', icon: '💻', color: '#3a9df8' },
-    { id: uid(), name: 'Alimentação', type: 'despesa', icon: '🍔', color: '#f5b942' },
-    { id: uid(), name: 'Transporte', type: 'despesa', icon: '🚗', color: '#f04060' },
-    { id: uid(), name: 'Moradia', type: 'despesa', icon: '🏠', color: '#7c5cfc' },
-    { id: uid(), name: 'Saúde', type: 'despesa', icon: '💊', color: '#f06292' },
-    { id: uid(), name: 'Lazer', type: 'despesa', icon: '🎮', color: '#4dd0e1' },
-    { id: uid(), name: 'Educação', type: 'despesa', icon: '📚', color: '#aed581' },
+    { id: uid(), name: 'Salário',      type: 'receita', icon: '💼', color: '#22c98a' },
+    { id: uid(), name: 'Freelance',    type: 'receita', icon: '💻', color: '#3a9df8' },
+    { id: uid(), name: 'Alimentação',  type: 'despesa', icon: '🍔', color: '#f5b942' },
+    { id: uid(), name: 'Transporte',   type: 'despesa', icon: '🚗', color: '#f04060' },
+    { id: uid(), name: 'Moradia',      type: 'despesa', icon: '🏠', color: '#7c5cfc' },
+    { id: uid(), name: 'Saúde',        type: 'despesa', icon: '💊', color: '#f06292' },
+    { id: uid(), name: 'Lazer',        type: 'despesa', icon: '🎮', color: '#4dd0e1' },
+    { id: uid(), name: 'Educação',     type: 'despesa', icon: '📚', color: '#aed581' },
   ];
 }
 
 function getSampleTransactions() {
+  // Usa state.categories e state.accounts que já foram definidos antes desta chamada
   const cats = state.categories;
   const accs = state.accounts;
   const now = new Date();
-  const txs = [
-    { id: uid(), desc: 'Salário Mensal', amount: 5000, type: 'receita', catId: cats[0]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(), 5).toISOString().split('T')[0], note: '' },
-    { id: uid(), desc: 'Aluguel', amount: 1200, type: 'despesa', catId: cats[4]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(), 10).toISOString().split('T')[0], note: '' },
-    { id: uid(), desc: 'Supermercado', amount: 350, type: 'despesa', catId: cats[2]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(), 12).toISOString().split('T')[0], note: '' },
-    { id: uid(), desc: 'Freelance Design', amount: 1500, type: 'receita', catId: cats[1]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(), 15).toISOString().split('T')[0], note: '' },
-    { id: uid(), desc: 'Academia', amount: 80, type: 'despesa', catId: cats[5]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0], note: '' },
-    { id: uid(), desc: 'Netflix + Spotify', amount: 60, type: 'despesa', catId: cats[6]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(), 3).toISOString().split('T')[0], note: '' },
+  const m = (offset = 0) => new Date(now.getFullYear(), now.getMonth() + offset, 1);
+
+  return [
+    { id: uid(), desc: 'Salário Mensal',    amount: 5000, type: 'receita', catId: cats[0]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(),     5).toISOString().split('T')[0], note: '' },
+    { id: uid(), desc: 'Salário Mensal',    amount: 5000, type: 'receita', catId: cats[0]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth() - 1, 5).toISOString().split('T')[0], note: '' },
+    { id: uid(), desc: 'Freelance Design',  amount: 1500, type: 'receita', catId: cats[1]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(),    15).toISOString().split('T')[0], note: '' },
+    { id: uid(), desc: 'Aluguel',           amount: 1200, type: 'despesa', catId: cats[4]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(),    10).toISOString().split('T')[0], note: '' },
+    { id: uid(), desc: 'Aluguel',           amount: 1200, type: 'despesa', catId: cats[4]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth() - 1,10).toISOString().split('T')[0], note: '' },
+    { id: uid(), desc: 'Supermercado',      amount:  350, type: 'despesa', catId: cats[2]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(),    12).toISOString().split('T')[0], note: '' },
+    { id: uid(), desc: 'Academia',          amount:   80, type: 'despesa', catId: cats[5]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(),     1).toISOString().split('T')[0], note: '' },
+    { id: uid(), desc: 'Netflix + Spotify', amount:   60, type: 'despesa', catId: cats[6]?.id, accId: accs[0]?.id, date: new Date(now.getFullYear(), now.getMonth(),     3).toISOString().split('T')[0], note: '' },
   ];
-  return txs;
 }
 
 function getSampleInvestments() {
+  const today = new Date().toISOString().split('T')[0];
   return [
-    { id: uid(), name: 'Tesouro Selic 2026', type: 'renda-fixa', invested: 3000, currentValue: 3180, date: new Date().toISOString().split('T')[0] },
-    { id: uid(), name: 'PETR4', type: 'renda-variavel', invested: 2000, currentValue: 2340, date: new Date().toISOString().split('T')[0] },
-    { id: uid(), name: 'Bitcoin', type: 'cripto', invested: 500, currentValue: 720, date: new Date().toISOString().split('T')[0] },
+    { id: uid(), name: 'Tesouro Selic 2026', type: 'renda-fixa',     invested: 3000, currentValue: 3180, date: today, history: [{ date: today, value: 3180 }] },
+    { id: uid(), name: 'PETR4',              type: 'renda-variavel', invested: 2000, currentValue: 2340, date: today, history: [{ date: today, value: 2340 }] },
+    { id: uid(), name: 'Bitcoin',            type: 'cripto',         invested:  500, currentValue:  720, date: today, history: [{ date: today, value:  720 }] },
   ];
 }
 
 function getSampleGoals() {
   return [
     { id: uid(), name: 'Fundo de Emergência', target: 10000, current: 3500, deadline: '2025-12-31', icon: '🛡️' },
-    { id: uid(), name: 'Viagem Europa', target: 8000, current: 1200, deadline: '2026-06-30', icon: '✈️' },
+    { id: uid(), name: 'Viagem Europa',        target:  8000, current: 1200, deadline: '2026-06-30', icon: '✈️' },
   ];
 }
 
@@ -1176,13 +974,6 @@ function getSampleInvoices() {
   const now = new Date();
   return [
     { id: uid(), desc: 'Cartão Nubank', amount: 850, due: new Date(now.getFullYear(), now.getMonth(), 20).toISOString().split('T')[0], status: 'pendente', catId: '' },
-    { id: uid(), desc: 'Conta de Luz', amount: 120, due: new Date(now.getFullYear(), now.getMonth(), 15).toISOString().split('T')[0], status: 'atrasado', catId: '' },
+    { id: uid(), desc: 'Conta de Luz',  amount: 120, due: new Date(now.getFullYear(), now.getMonth(), 15).toISOString().split('T')[0], status: 'atrasado', catId: '' },
   ];
 }
-
-// Close modal on overlay click
-document.querySelectorAll('.modal-overlay').forEach(overlay => {
-  overlay.addEventListener('click', e => {
-    if (e.target === overlay) overlay.classList.remove('active');
-  });
-});
