@@ -12,7 +12,9 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable;
+    use HasFactory;
+    use Notifiable;
+    use TwoFactorAuthenticatable;
 
     /**
      * The attributes that are mass assignable.
@@ -51,7 +53,7 @@ class User extends Authenticatable
     }
 
     /**
-     * Get the user's initials
+     * Get the user's initials.
      */
     public function initials(): string
     {
@@ -60,5 +62,35 @@ class User extends Authenticatable
             ->take(2)
             ->map(fn ($word) => Str::substr($word, 0, 1))
             ->implode('');
+    }
+
+    public function accounts()
+    {
+        return $this->hasMany(Accounts::class);
+    }
+
+    public function categories()
+    {
+        return $this->hasMany(Categories::class);
+    }
+
+    public function transactions()
+    {
+        return $this->hasMany(Transactions::class);
+    }
+
+    public function invoices()
+    {
+        return $this->hasMany(Invoices::class);
+    }
+
+    public function investments()
+    {
+        return $this->hasMany(Investments::class);
+    }
+
+    public function goals()
+    {
+        return $this->hasMany(Goals::class);
     }
 }
