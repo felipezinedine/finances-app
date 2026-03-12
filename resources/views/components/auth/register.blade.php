@@ -44,10 +44,16 @@ new class extends Component
             ]);
 
             auth()->login($user);
-            session()->flash('success', 'Conta criada com sucesso! Bem-vindo ao FinFlow.');
+            $this->dispatch('toast', [
+                'message' => 'Login realizado com sucesso 🚀',
+                'type' => 'success'
+            ]);
             return redirect()->route('dashboard');
         } else {
-            session()->flash('error', 'Ocorreu um erro ao criar a conta. Tente novamente.');
+            $this->dispatch('toast', [
+                'message' => 'Ocorreu um erro ao criar a conta. Tente novamente.',
+                'type' => 'error'
+            ]);
         }
     }
 

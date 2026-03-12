@@ -18,22 +18,7 @@
         <div class="auth-feat"><div class="auth-feat-icon">📱</div>Funciona em qualquer dispositivo</div>
       </div>
     </div>
-    <div class="auth-right">
-      <h2 class="auth-title">Entrar na conta</h2>
-      <p class="auth-desc">Informe seu e-mail e senha para continuar</p>
-      <div id="login-alert" style="display:none"></div>
-      <div class="form-group">
-        <label class="form-label">E-mail</label>
-        <input class="form-input" id="login-email" type="email" placeholder="joao@email.com">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Senha</label>
-        <input class="form-input" id="login-pass" type="password" placeholder="••••••••">
-      </div>
-      <a class="btn btn-primary btn-full" href="{{ route('login') }}">Entrar</a>
-      <div class="auth-link-row">Não tem conta? <a class="auth-link" href="{{ route('register') }}">Criar agora</a></div>
-      <div class="auth-link-row" style="margin-top:8px"><a class="auth-link" href="{{ route('demo') }}">Entrar com conta demo →</a></div>
-    </div>
+    <livewire:auth.login />
   </div>
 
 @endsection 

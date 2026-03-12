@@ -170,3 +170,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 });
+
+document.addEventListener('livewire:init', () => {
+
+    Livewire.on('toast', (data) => {
+        console.log('Toast event received:', data);
+        showToast(data[0].message, data[0].type);
+    });
+
+});
