@@ -20,11 +20,25 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Valor (R$)</label>
-          <input class="form-input" id="tx-amount" type="number" placeholder="0,00" min="0" step="0.01">
+          <input class="form-input money" id="tx-amount" type="text" placeholder="0,00">
         </div>
         <div class="form-group">
           <label class="form-label">Data</label>
           <input class="form-input" id="tx-date" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" id="tx-recurrence-group" style="display:none">
+          <label class="form-label">Tipo de lançamento</label>
+          <select class="form-input" id="tx-recurrence" onchange="toggleInstallments('tx')">
+            <option value="none">Único</option>
+            <option value="recurring">Recorrente (24x)</option>
+            <option value="installment">Parcelado</option>
+          </select>
+        </div>
+        <div class="form-group" id="tx-installments-group" style="display:none">
+          <label class="form-label">Parcelas (2-60)</label>
+          <input class="form-input" id="tx-installments" type="number" min="2" max="60" value="2">
         </div>
       </div>
       <div class="form-row">
@@ -61,6 +75,7 @@
       <button class="btn-close" onclick="closeModal('modal-investment')">×</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="inv-edit-id" value="">
       <div class="alert alert-info" style="background:rgba(245,185,66,0.1);color:var(--gold);border:1px solid rgba(245,185,66,0.2);padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;">
         💡 O valor investido será descontado do seu saldo atual
       </div>
@@ -82,7 +97,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Valor Aplicado (R$)</label>
-          <input class="form-input" id="inv-amount" type="number" placeholder="0,00" min="0" step="0.01">
+          <input class="form-input money" id="inv-amount" type="text" placeholder="0,00">
         </div>
       </div>
       <div class="form-group">
@@ -123,7 +138,7 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Valor atual (R$)</label>
-          <input class="form-input" id="upd-inv-val" type="number" placeholder="0,00" min="0" step="0.01">
+          <input class="form-input money" id="upd-inv-val" type="text" placeholder="0,00">
         </div>
         <div class="form-group">
           <label class="form-label">Data da atualização</label>
@@ -157,11 +172,11 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Valor alvo (R$)</label>
-          <input class="form-input" id="goal-target" type="number" placeholder="5000,00" min="0" step="0.01">
+          <input class="form-input money" id="goal-target" type="text" placeholder="5000,00">
         </div>
         <div class="form-group">
           <label class="form-label">Valor inicial (R$)</label>
-          <input class="form-input" id="goal-current" type="number" placeholder="0,00" min="0" step="0.01" value="0">
+          <input class="form-input money" id="goal-current" type="text" placeholder="0,00" value="0">
         </div>
       </div>
       <div class="form-row">
@@ -194,7 +209,7 @@
       <p style="font-size:14px;color:var(--text2);margin-bottom:16px" id="contrib-goal-desc"></p>
       <div class="form-group">
         <label class="form-label">Valor a adicionar (R$)</label>
-        <input class="form-input" id="contrib-amount" type="number" placeholder="0,00" min="0" step="0.01">
+        <input class="form-input money" id="contrib-amount" type="text" placeholder="0,00">
       </div>
     </div>
     <div class="modal-footer">
@@ -235,7 +250,7 @@
       </div>
       <div class="form-group">
         <label class="form-label">Saldo atual (R$)</label>
-        <input class="form-input" id="acc-balance" type="number" placeholder="0,00" min="0" step="0.01">
+        <input class="form-input money" id="acc-balance" type="text" placeholder="0,00">
       </div>
     </div>
     <div class="modal-footer">
@@ -315,7 +330,7 @@
       <button class="btn-close" onclick="closeModal('modal-invoice')">×</button>
     </div>
     <div class="modal-body">
-      <input type="hidden" id="inv-edit-id" value="">
+      <input type="hidden" id="invoice-edit-id" value="">
       <div class="form-group">
         <label class="form-label">Descrição</label>
         <input class="form-input" id="invoice-desc" type="text" placeholder="Ex: Cartão Nubank, Conta de luz...">
@@ -323,11 +338,25 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Valor (R$)</label>
-          <input class="form-input" id="invoice-amount" type="number" placeholder="0,00" min="0" step="0.01">
+          <input class="form-input money" id="invoice-amount" type="text" placeholder="0,00">
         </div>
         <div class="form-group">
           <label class="form-label">Vencimento</label>
           <input class="form-input" id="invoice-due" type="date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo de lançamento</label>
+          <select class="form-input" id="invoice-recurrence" onchange="toggleInstallments('invoice')">
+            <option value="none">Único</option>
+            <option value="recurring">Recorrente (24x)</option>
+            <option value="installment">Parcelado</option>
+          </select>
+        </div>
+        <div class="form-group" id="invoice-installments-group" style="display:none">
+          <label class="form-label">Parcelas (2-60)</label>
+          <input class="form-input" id="invoice-installments" type="number" min="2" max="60" value="2">
         </div>
       </div>
       <div class="form-row">
@@ -353,3 +382,101 @@
     </div>
   </div>
 </div>
+
+
+{{-- <script>
+  function openModal(modalId, options = {}) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+
+    // Exibe o overlay
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    // Configurações específicas por modal
+    const setup = {
+      'modal-transaction': () => {
+        document.getElementById('tx-edit-id').value = '';
+        document.getElementById('tx-desc').value = '';
+        document.getElementById('tx-amount').value = '';
+        document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('tx-note').value = '';
+        document.getElementById('tx-recurrence').value = 'none';
+        document.getElementById('tx-installments-group').style.display = 'none';
+
+        if (options.type) setTxType(options.type,
+          document.querySelector(`#tx-type-tabs .type-tab:nth-child(${
+            { receita: 1, despesa: 2, investimento: 3 }[options.type]
+          })`)
+        );
+      },
+
+      'modal-investment': () => {
+        document.getElementById('inv-name').value = '';
+        document.getElementById('inv-amount').value = '';
+        document.getElementById('inv-date').value = new Date().toISOString().split('T')[0];
+        document.getElementById('inv-type').value = 'renda-fixa';
+      },
+
+      'modal-update-invest': () => {
+        document.getElementById('upd-inv-val').value = '';
+        document.getElementById('upd-inv-date').value = new Date().toISOString().split('T')[0];
+        if (options.investmentId) {
+          document.getElementById('upd-inv-select').value = options.investmentId;
+        }
+      },
+
+      'modal-goal': () => {
+        document.getElementById('goal-edit-id').value = '';
+        document.getElementById('goal-name').value = '';
+        document.getElementById('goal-target').value = '';
+        document.getElementById('goal-current').value = '0';
+        document.getElementById('goal-deadline').value = '';
+        document.getElementById('goal-icon').value = '🎯';
+      },
+
+      'modal-goal-contribute': () => {
+        document.getElementById('contrib-amount').value = '';
+        if (options.goalId) {
+          document.getElementById('contrib-goal-id').value = options.goalId;
+        }
+        if (options.description) {
+          document.getElementById('contrib-goal-desc').textContent = options.description;
+        }
+      },
+
+      'modal-account': () => {
+        document.getElementById('acc-edit-id').value = '';
+        document.getElementById('acc-name').value = '';
+        document.getElementById('acc-bank').value = '';
+        document.getElementById('acc-balance').value = '';
+        document.getElementById('acc-type').value = 'corrente';
+      },
+
+      'modal-category': () => {
+        document.getElementById('cat-edit-id').value = '';
+        document.getElementById('cat-name').value = '';
+        document.getElementById('cat-type-val').value = 'receita';
+        document.getElementById('cat-icon').value = '💰';
+        document.getElementById('cat-color').value = '#7c5cfc';
+      },
+
+      'modal-invoice': () => {
+        document.getElementById('inv-edit-id').value = '';
+        document.getElementById('invoice-desc').value = '';
+        document.getElementById('invoice-amount').value = '';
+        document.getElementById('invoice-due').value = new Date().toISOString().split('T')[0];
+        document.getElementById('invoice-recurrence').value = 'none';
+        document.getElementById('invoice-installments-group').style.display = 'none';
+        document.getElementById('invoice-status').value = 'pendente';
+      },
+    };
+
+    // Executa setup do modal específico, se existir
+    if (setup[modalId]) setup[modalId]();
+
+    // Foco no primeiro campo de texto, se houver
+    const firstInput = modal.querySelector('input[type="text"], input[type="number"]');
+    if (firstInput) setTimeout(() => firstInput.focus(), 50);
+  }
+</script> --}}

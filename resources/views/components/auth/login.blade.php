@@ -26,7 +26,7 @@ new class extends Component
                 'type' => 'success'
             ]);
             
-            return redirect()->intended('/dashboard');
+            return redirect()->intended('/index');
         } else {
             $this->dispatch('toast', [
                 'message' => 'Credenciais inválidas. Tente novamente.',

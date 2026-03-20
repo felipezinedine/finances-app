@@ -4,7 +4,7 @@
 // Depende de: state.js (deve vir ANTES no master.blade.php)
 // ============================================================
 
-window.onload = () => {
+document.addEventListener('DOMContentLoaded', () => {
   loadState();
   demoLogin();
-};
+});

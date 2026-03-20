@@ -6,6 +6,7 @@
         
         <title>FinFlow — Controle Financeiro</title>
 
+        <meta name="csrf-token" content="{{ csrf_token() }}">
         <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="{{ asset('css/finances-init.css') }}">
         @stack('styles')
@@ -16,7 +17,7 @@
 
     @auth
         <div class="app-layout active" id="app-layout">
-            @include('inc.sidebar')
+            @include('layouts.inc.sidebar')
 
             <div class="main-content">
                 <div class="topbar">
@@ -28,6 +29,7 @@
 
                 <div class="content">
                     @yield('section')
+                    @include('modals.all')
                 </div>
             </div>
         </div>
@@ -39,5 +41,6 @@
     <script src="{{ asset('js/state.js') }}"></script>
     @stack('scripts')
 
+    @livewireScripts
 </body>
 </html>

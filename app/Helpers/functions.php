@@ -36,6 +36,23 @@ if (!function_exists('userEmail')) {
     }
 }
 
+if (!function_exists('getInitialsUser')) {
+    function getInitialsUser(): string
+    {
+        $name = trim(userName());
+        $parts = explode(' ', $name);
+
+        if (count($parts) > 1) {
+            $first = mb_substr($parts[0], 0, 1);
+            $last = mb_substr(end($parts), 0, 1);
+
+            return strtoupper($first.$last);
+        }
+
+        return strtoupper(mb_substr($name, 0, 2));
+    }
+}
+
 /*
 |--------------------------------------------------------------------------
 | FORMATAÇÕES FINANCEIRAS

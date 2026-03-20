@@ -40,13 +40,12 @@ function demoLogin() {
   saveState();
   showToast('Entrou com conta demo 🚀', 'info');
 
-  // Se o app-layout já está no DOM (renderizado pelo Blade),
-  // apenas atualiza a UI — não tenta montar o app do zero
   if (document.getElementById('app-layout')) {
     updateUserUI();
-    renderDashboard();
+    // Adia a renderização para o próximo frame do browser,
+    // garantindo que todos os elementos do DOM já estão disponíveis
+    requestAnimationFrame(() => showPage('dashboard'));
   } else {
-    // Fallback: SPA mode (HTML único sem Blade)
     showApp();
   }
 }

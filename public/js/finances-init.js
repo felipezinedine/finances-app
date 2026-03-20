@@ -1,26 +1,97 @@
-function demoLogin() {
-  // Sempre recria o estado demo do zero para garantir dados frescos e consistentes
-  // Remove usuário demo anterior se existir
-  state.users = state.users.filter(u => u.email !== 'demo@finflow.com');
+async function apiPost(url, data) {
+  const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': token,
+    },
+    body: JSON.stringify(data),
+    credentials: 'same-origin',
+  });
 
-  const demo = { id: 'demo-user', name: 'Demo', lastname: 'User', email: 'demo@finflow.com', pass: 'demo' };
-  state.users.push(demo);
-  state.currentUser = demo;
-  state.balance = 15000;
-  state.categories = getDefaultCategories();
-  state.accounts = [
-    { id: 'acc1', name: 'Conta Corrente', bank: 'Nubank', type: 'corrente', balance: 8500 },
-    { id: 'acc2', name: 'Poupança', bank: 'Caixa', type: 'poupanca', balance: 6500 },
-  ];
-  // Gera dados de exemplo já com as categorias e contas acima definidas
-  state.transactions = getSampleTransactions();
-  state.investments = getSampleInvestments();
-  state.goals = getSampleGoals();
-  state.invoices = getSampleInvoices();
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = json.message || 'Erro ao salvar dados';
+    showToast(message, 'error');
+    throw new Error(message);
+  }
 
+  return json;
+}
+
+async function apiPut(url, data) {
+  const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': token,
+    },
+    body: JSON.stringify(data),
+    credentials: 'same-origin',
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = json.message || 'Erro ao atualizar dados';
+    showToast(message, 'error');
+    throw new Error(message);
+  }
+
+  return json;
+}
+
+async function apiDelete(url) {
+  const token = document.querySelector('meta[name="csrf-token"]')?.content || '';
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': token,
+    },
+    credentials: 'same-origin',
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = json.message || 'Erro ao remover dados';
+    showToast(message, 'error');
+    throw new Error(message);
+  }
+
+  return json;
+}
+
+function applyServerState(newState) {
+  if (!newState || !newState.currentUser) return;
+  state = { ...state, ...newState };
   saveState();
-  showToast('Entrou com conta demo 🚀', 'info');
-  showApp();
+  updateUserUI();
+  renderDashboard();
+  renderTransactions();
+  renderInvoices();
+  renderInvestments();
+  renderGoals();
+  renderAccounts();
+  renderCategories();
+}
+
+/**
+ * Converte valor formatado em BRL (1.234,56) para number (1234.56)
+ */
+function parseMoney(value) {
+  if (value === null || value === undefined) return NaN;
+  const v = String(value).trim();
+  if (!v) return NaN;
+  const hasComma = v.indexOf(',') !== -1;
+  let cleaned = v.replace(/[^0-9,.-]/g, '');
+  if (hasComma) {
+    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+  } else {
+    cleaned = cleaned.replace(/\./g, '');
+  }
+  return parseFloat(cleaned);
 }
 
 function populateSelects() {
@@ -66,11 +137,35 @@ function populateSelects() {
 function setTxType(type, btn) {
   selectedTxType = type;
   document.getElementById('tx-type-val').value = type;
+
+  // Marcar aba ativa
   document.querySelectorAll('#tx-type-tabs .type-tab').forEach(t => {
     t.className = 'type-tab';
   });
   const classMap = { receita: 'active-green', despesa: 'active-red', investimento: 'active-gold' };
   btn.className = 'type-tab ' + classMap[type];
+
+  // Mostrar tipo de lançamento apenas para despesas
+  const recurrenceGroup = document.getElementById('tx-recurrence-group');
+  if (recurrenceGroup) {
+    recurrenceGroup.style.display = type === 'despesa' ? 'block' : 'none';
+  }
+
+  // Resetar seleção de recorrência caso não seja despesa
+  if (type !== 'despesa') {
+    const rec = document.getElementById('tx-recurrence');
+    if (rec) {
+      rec.value = 'none';
+    }
+    if (typeof toggleInstallments === 'function') toggleInstallments('tx');
+  }
+}
+
+function toggleInstallments(prefix) {
+  const sel = document.getElementById(`${prefix}-recurrence`);
+  const group = document.getElementById(`${prefix}-installments-group`);
+  if (!sel || !group) return;
+  group.style.display = sel.value === 'installment' ? 'block' : 'none';
 }
 
 function setCatType(type, btn) {
@@ -98,39 +193,65 @@ function selectEmoji(el, emoji) {
 // ============================================================
 // TRANSACTIONS
 // ============================================================
-function saveTransaction() {
+async function saveTransaction() {
   const desc = document.getElementById('tx-desc').value.trim();
-  const amount = parseFloat(document.getElementById('tx-amount').value);
+  const amount = parseMoney(document.getElementById('tx-amount').value);
   const date = document.getElementById('tx-date').value;
   const catId = document.getElementById('tx-category').value;
   const accId = document.getElementById('tx-account').value;
   const note = document.getElementById('tx-note').value.trim();
   const type = document.getElementById('tx-type-val').value;
+  const recurrence = document.getElementById('tx-recurrence')?.value || 'none';
+  const installments = parseInt(document.getElementById('tx-installments')?.value) || null;
   const editId = document.getElementById('tx-edit-id').value;
 
   if (!desc || !amount || !date) { showToast('Preencha todos os campos', 'error'); return; }
 
   if (editId) {
-    const idx = state.transactions.findIndex(t => t.id === editId);
-    if (idx !== -1) {
-      const old = state.transactions[idx];
-      reverseBalanceEffect(old);
-      state.transactions[idx] = { ...old, desc, amount, date, catId, accId, note, type };
-      applyBalanceEffect(state.transactions[idx]);
+    try {
+      const resp = await apiPut(`/transactions/${editId}`, {
+        description: desc,
+        amount,
+        date,
+        type,
+        account_id: accId || null,
+        category_id: catId || null,
+        note: note || null,
+        recurrence,
+        installments: recurrence === 'installment' ? installments : null,
+      });
+
+      applyServerState(resp);
+      showToast('Transação atualizada ✅', 'success');
+      closeModal('modal-transaction');
+      clearTxForm();
+      return;
+    } catch (e) {
+      // erro já exibido em apiPut()
+      return;
     }
-    showToast('Transação atualizada ✅', 'success');
-  } else {
-    const tx = { id: uid(), desc, amount, date, catId, accId, note, type };
-    state.transactions.unshift(tx);
-    applyBalanceEffect(tx);
-    showToast(type === 'receita' ? '💰 Receita registrada!' : type === 'despesa' ? '💸 Despesa registrada!' : '📈 Investimento registrado!', 'success');
   }
 
-  saveState();
-  closeModal('modal-transaction');
-  clearTxForm();
-  renderDashboard();
-  renderTransactions();
+  try {
+    const resp = await apiPost('/transactions', {
+      description: desc,
+      amount,
+      date,
+      type,
+      account_id: accId || null,
+      category_id: catId || null,
+      note: note || null,
+      recurrence,
+      installments: recurrence === 'installment' ? installments : null,
+    });
+
+    applyServerState(resp);
+    showToast(type === 'receita' ? '💰 Receita registrada!' : type === 'despesa' ? '💸 Despesa registrada!' : '📈 Investimento registrada!', 'success');
+    closeModal('modal-transaction');
+    clearTxForm();
+  } catch (e) {
+    // Erro já mostrado em apiPost()
+  }
 }
 
 function applyBalanceEffect(tx) {
@@ -151,6 +272,17 @@ function clearTxForm() {
   document.getElementById('tx-note').value = '';
   document.getElementById('tx-edit-id').value = '';
   document.getElementById('tx-date').value = new Date().toISOString().split('T')[0];
+
+  const rec = document.getElementById('tx-recurrence');
+  if (rec) rec.value = 'none';
+  const inst = document.getElementById('tx-installments');
+  if (inst) inst.value = '2';
+
+  // Resetar tipo sempre para receita (para esconder Tipo de lançamento)
+  const receitaBtn = document.querySelector('#tx-type-tabs .type-tab');
+  if (receitaBtn) setTxType('receita', receitaBtn);
+
+  if (typeof toggleInstallments === 'function') toggleInstallments('tx');
 }
 
 function editTransaction(id) {
@@ -167,26 +299,29 @@ function editTransaction(id) {
     document.getElementById('tx-account').value = tx.accId || '';
 
     const tabs = document.querySelectorAll('#tx-type-tabs .type-tab');
-    tabs.forEach(t => t.className = 'type-tab');
     const classMap = { receita: 0, despesa: 1, investimento: 2 };
-    const classNames = ['active-green', 'active-red', 'active-gold'];
     const idx = classMap[tx.type] || 0;
-    tabs[idx].className = 'type-tab ' + classNames[idx];
+
+    // Atualiza o estilo do botão e a visibilidade dos controles de recorrência
+    if (tabs[idx]) setTxType(tx.type, tabs[idx]);
+
     document.getElementById('tx-type-val').value = tx.type;
     selectedTxType = tx.type;
   }, 50);
 }
 
-function deleteTransaction(id) {
+async function deleteTransaction(id) {
   const tx = state.transactions.find(t => t.id === id);
   if (!tx) return;
   if (!confirm('Excluir esta transação?')) return;
-  reverseBalanceEffect(tx);
-  state.transactions = state.transactions.filter(t => t.id !== id);
-  saveState();
-  showToast('Transação excluída', 'info');
-  renderTransactions();
-  renderDashboard();
+
+  try {
+    const resp = await apiDelete(`/transactions/${id}`);
+    applyServerState(resp);
+    showToast('Transação excluída', 'info');
+  } catch (e) {
+    // erro já exibido em apiDelete()
+  }
 }
 
 function renderTransactions() {
@@ -194,11 +329,21 @@ function renderTransactions() {
   const filterType = document.getElementById('tx-filter-type')?.value || '';
   const filterCat = document.getElementById('tx-filter-cat')?.value || '';
 
+  // Obter mês e ano atual
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
   const txs = state.transactions.filter(tx => {
     const matchSearch = !search || tx.desc.toLowerCase().includes(search);
     const matchType = !filterType || tx.type === filterType;
     const matchCat = !filterCat || tx.catId === filterCat;
-    return matchSearch && matchType && matchCat;
+    
+    // Filtrar por mês e ano atual
+    const txDate = new Date(tx.date + 'T00:00:00');
+    const matchMonth = txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+    
+    return matchSearch && matchType && matchCat && matchMonth;
   });
 
   populateSelects();
@@ -240,53 +385,86 @@ function renderTransactions() {
 // ============================================================
 // INVESTMENTS
 // ============================================================
-function saveInvestment() {
-  const name = document.getElementById('inv-name').value.trim();
-  const type = document.getElementById('inv-type').value;
-  const amount = parseFloat(document.getElementById('inv-amount').value);
-  const accId = document.getElementById('inv-account').value;
-  const date = document.getElementById('inv-date').value;
+async function saveInvestment() {
+  // Helper para pegar valores com segurança
+  const getVal = (id, def = '') => {
+    const el = document.getElementById(id);
+    return el ? el.value : def;
+  };
+
+  const name = getVal('inv-name', '').trim();
+  const type = getVal('inv-type', 'renda-fixa');
+  const amount = parseMoney(getVal('inv-amount', ''));
+  const accId = getVal('inv-account', '');
+  const date = getVal('inv-date', '');
+  const editId = getVal('inv-edit-id', '');
 
   if (!name || !amount) { showToast('Preencha todos os campos', 'error'); return; }
 
-  const inv = { id: uid(), name, type, invested: amount, currentValue: amount, accId, date, history: [{ date, value: amount }] };
-  state.investments.push(inv);
-  state.balance -= amount;
+  try {
+    const payload = {
+      name,
+      type,
+      invested: amount,
+      currentValue: amount,
+      date,
+      account_id: accId || null,
+    };
 
-  // Registra também como transação para aparecer no histórico
-  state.transactions.unshift({ id: uid(), desc: `Investimento: ${name}`, amount, date, type: 'investimento', catId: '', accId, note: type });
+    let resp;
+    if (editId) {
+      resp = await apiPut(`/investments/${editId}`, payload);
+      showToast('Investimento atualizado 📈', 'success');
+    } else {
+      resp = await apiPost('/investments', payload);
+      showToast('Investimento registrado 📈', 'success');
+    }
 
-  saveState();
-  closeModal('modal-investment');
-  document.getElementById('inv-name').value = '';
-  document.getElementById('inv-amount').value = '';
-  showToast('Investimento registrado 📈', 'success');
-  renderInvestments();
-  renderDashboard();
+    applyServerState(resp);
+    closeModal('modal-investment');
+    if (document.getElementById('inv-name')) document.getElementById('inv-name').value = '';
+    if (document.getElementById('inv-amount')) document.getElementById('inv-amount').value = '';
+    if (document.getElementById('inv-edit-id')) document.getElementById('inv-edit-id').value = '';
+  } catch (e) {
+    // Erro já exibido
+  }
 }
 
-function updateInvestmentValue() {
-  const id = document.getElementById('upd-inv-select').value;
-  const val = parseFloat(document.getElementById('upd-inv-val').value);
-  const date = document.getElementById('upd-inv-date').value;
+async function updateInvestmentValue() {
+  const getVal = (id, def = '') => {
+    const el = document.getElementById(id);
+    return el ? el.value : def;
+  };
+
+  const id = getVal('upd-inv-select', '');
+  const val = parseMoney(getVal('upd-inv-val', ''));
+  const date = getVal('upd-inv-date', '');
 
   if (!id || !val) { showToast('Selecione o investimento e informe o valor', 'error'); return; }
 
-  const inv = state.investments.find(i => i.id === id);
-  if (!inv) return;
+  try {
+    const inv = state.investments.find(i => i.id === id);
+    if (!inv) return;
 
-  // Atualiza apenas o valor de mercado — NÃO afeta saldo em conta
-  inv.currentValue = val;
-  inv.history = inv.history || [];
-  inv.history.push({ date, value: val });
+    const resp = await apiPut(`/investments/${id}`, {
+      name: inv.name,
+      type: inv.type,
+      invested: inv.invested,
+      currentValue: val,
+      date,
+      account_id: inv.accId || null,
+    });
 
-  saveState();
-  closeModal('modal-update-invest');
-  showToast('Valor de mercado atualizado ✅', 'success');
-  renderInvestments();
+    applyServerState(resp);
+    closeModal('modal-update-invest');
+    showToast('Valor de mercado atualizado ✅', 'success');
+  } catch (e) {
+    // erro exibido
+  }
 }
 
 function renderInvestments() {
+  if (!document.getElementById('invest-stats')) return;
   const invs = state.investments || [];
   const totalInvested = invs.reduce((s, i) => s + i.invested, 0);
   const totalCurrent = invs.reduce((s, i) => s + (i.currentValue || i.invested), 0);
@@ -316,7 +494,10 @@ function renderInvestments() {
     return `<div class="invest-card">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <div class="invest-name">${inv.name}</div>
-        <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteInvestment('${inv.id}')" style="color:var(--red)">🗑️</button>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="editInvestment('${inv.id}')" title="Editar">✏️</button>
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteInvestment('${inv.id}')" title="Excluir" style="color:var(--red)">🗑️</button>
+        </div>
       </div>
       <div class="invest-type">${typeLabels[inv.type] || inv.type}</div>
       <div class="invest-value">${fmt(cur)}</div>
@@ -331,47 +512,86 @@ function renderInvestments() {
   }).join('');
 }
 
-function deleteInvestment(id) {
+async function deleteInvestment(id) {
   if (!confirm('Excluir este investimento?')) return;
+
+  try {
+    const resp = await apiDelete(`/investments/${id}`);
+    applyServerState(resp);
+    showToast('Investimento removido', 'info');
+  } catch (e) {
+    // erro já exibido
+  }
+}
+
+function editInvestment(id) {
   const inv = state.investments.find(i => i.id === id);
-  if (inv) state.balance += inv.invested;
-  state.investments = state.investments.filter(i => i.id !== id);
-  saveState();
-  showToast('Investimento removido', 'info');
-  renderInvestments();
+  if (!inv) return;
+
+  // Definir o edit-id antes de abrir o modal
+  const editIdEl = document.getElementById('inv-edit-id');
+  if (editIdEl) editIdEl.value = inv.id;
+
+  openModal('modal-investment');
+  setTimeout(() => {
+    const set = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.value = val;
+    };
+
+    set('inv-name', inv.name);
+    set('inv-type', inv.type);
+    set('inv-amount', fmt(inv.invested));
+    set('inv-account', inv.accId || '');
+    set('inv-date', inv.date || new Date().toISOString().split('T')[0]);
+  }, 50);
 }
 
 // ============================================================
 // GOALS
 // ============================================================
-function saveGoal() {
-  const name = document.getElementById('goal-name').value.trim();
-  const target = parseFloat(document.getElementById('goal-target').value);
-  const current = parseFloat(document.getElementById('goal-current').value) || 0;
-  const deadline = document.getElementById('goal-deadline').value;
-  const icon = document.getElementById('goal-icon').value || '🎯';
-  const editId = document.getElementById('goal-edit-id').value;
+async function saveGoal() {
+  const getVal = (id, def = '') => {
+    const el = document.getElementById(id);
+    return el ? el.value : def;
+  };
+
+  const name = getVal('goal-name', '').trim();
+  const target = parseMoney(getVal('goal-target', ''));
+  const current = parseMoney(getVal('goal-current', '')) || 0;
+  const deadline = getVal('goal-deadline', '');
+  const icon = getVal('goal-icon', '🎯');
+  const editId = getVal('goal-edit-id', '');
 
   if (!name || !target) { showToast('Preencha nome e valor alvo', 'error'); return; }
 
-  if (editId) {
-    const idx = state.goals.findIndex(g => g.id === editId);
-    if (idx !== -1) state.goals[idx] = { ...state.goals[idx], name, target, deadline, icon };
-    showToast('Meta atualizada ✅', 'success');
-  } else {
-    if (current > 0) state.balance -= current;
-    state.goals.push({ id: uid(), name, target, current, deadline, icon });
-    showToast('Meta criada! 🎯', 'success');
-  }
+  const payload = {
+    name,
+    target,
+    current,
+    deadline: deadline || null,
+    icon,
+  };
 
-  saveState();
-  closeModal('modal-goal');
-  document.getElementById('goal-name').value = '';
-  document.getElementById('goal-target').value = '';
-  document.getElementById('goal-current').value = '0';
-  document.getElementById('goal-edit-id').value = '';
-  renderGoals();
-  renderDashboard();
+  try {
+    let resp;
+    if (editId) {
+      resp = await apiPut(`/goals/${editId}`, payload);
+      showToast('Meta atualizada ✅', 'success');
+    } else {
+      resp = await apiPost('/goals', payload);
+      showToast('Meta criada! 🎯', 'success');
+    }
+
+    applyServerState(resp);
+    closeModal('modal-goal');
+    if (document.getElementById('goal-name')) document.getElementById('goal-name').value = '';
+    if (document.getElementById('goal-target')) document.getElementById('goal-target').value = '';
+    if (document.getElementById('goal-current')) document.getElementById('goal-current').value = '0';
+    if (document.getElementById('goal-edit-id')) document.getElementById('goal-edit-id').value = '';
+  } catch (e) {
+    // Erro já exibido
+  }
 }
 
 function openContribute(id) {
@@ -383,29 +603,57 @@ function openContribute(id) {
   openModal('modal-goal-contribute');
 }
 
-function contributeGoal() {
+function editGoal(id) {
+  const goal = state.goals.find(g => g.id === id);
+  if (!goal) return;
+
+  openModal('modal-goal');
+  setTimeout(() => {
+    document.getElementById('goal-edit-id').value = goal.id;
+    document.getElementById('goal-name').value = goal.name;
+    document.getElementById('goal-target').value = fmt(goal.target);
+    document.getElementById('goal-current').value = fmt(goal.current);
+    document.getElementById('goal-deadline').value = goal.deadline || '';
+    document.getElementById('goal-icon').value = goal.icon || '🎯';
+  }, 50);
+}
+
+async function contributeGoal() {
   const id = document.getElementById('contrib-goal-id').value;
-  const amount = parseFloat(document.getElementById('contrib-amount').value);
+  const amount = parseMoney(document.getElementById('contrib-amount').value);
   if (!amount) { showToast('Informe o valor', 'error'); return; }
   const goal = state.goals.find(g => g.id === id);
   if (!goal) return;
-  goal.current = (goal.current || 0) + amount;
-  state.balance -= amount;
-  saveState();
-  closeModal('modal-goal-contribute');
-  showToast(`+${fmt(amount)} adicionado à meta! 🎯`, 'success');
-  renderGoals();
-  renderDashboard();
+
+  const updatedCurrent = (goal.current || 0) + amount;
+
+  try {
+    const resp = await apiPut(`/goals/${id}`, {
+      name: goal.name,
+      target: goal.target,
+      current: updatedCurrent,
+      deadline: goal.deadline || null,
+      icon: goal.icon || '🎯',
+    });
+
+    applyServerState(resp);
+    closeModal('modal-goal-contribute');
+    showToast(`+${fmt(amount)} adicionado à meta! 🎯`, 'success');
+  } catch (e) {
+    // erro já exibido
+  }
 }
 
-function deleteGoal(id) {
+async function deleteGoal(id) {
   if (!confirm('Excluir esta meta?')) return;
-  const goal = state.goals.find(g => g.id === id);
-  if (goal) state.balance += goal.current || 0;
-  state.goals = state.goals.filter(g => g.id !== id);
-  saveState();
-  showToast('Meta removida', 'info');
-  renderGoals();
+
+  try {
+    const resp = await apiDelete(`/goals/${id}`);
+    applyServerState(resp);
+    showToast('Meta removida', 'info');
+  } catch (e) {
+    // erro já exibido
+  }
 }
 
 function renderGoals() {
@@ -426,7 +674,8 @@ function renderGoals() {
         <div style="font-size:24px">${g.icon || '🎯'}</div>
         <div style="display:flex;gap:4px">
           ${done ? '<span class="badge badge-green">✅ Concluída</span>' : ''}
-          <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteGoal('${g.id}')" style="color:var(--red)">🗑️</button>
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="editGoal('${g.id}')" title="Editar">✏️</button>
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteGoal('${g.id}')" style="color:var(--red)" title="Excluir">🗑️</button>
         </div>
       </div>
       <div class="goal-name">${g.name}</div>
@@ -448,40 +697,72 @@ function renderGoals() {
 // ============================================================
 // ACCOUNTS
 // ============================================================
-function saveAccount() {
-  const name = document.getElementById('acc-name').value.trim();
-  const bank = document.getElementById('acc-bank').value.trim();
-  const type = document.getElementById('acc-type').value;
-  const balance = parseFloat(document.getElementById('acc-balance').value) || 0;
-  const editId = document.getElementById('acc-edit-id').value;
+async function saveAccount() {
+  const getVal = (id, def = '') => {
+    const el = document.getElementById(id);
+    return el ? el.value : def;
+  };
+
+  const name = getVal('acc-name', '').trim();
+  const bank = getVal('acc-bank', '').trim();
+  const type = getVal('acc-type', 'corrente');
+  const balance = parseMoney(getVal('acc-balance', '')) || 0;
+  const editId = getVal('acc-edit-id', '');
 
   if (!name) { showToast('Informe o nome da conta', 'error'); return; }
 
-  if (editId) {
-    const idx = state.accounts.findIndex(a => a.id === editId);
-    if (idx !== -1) state.accounts[idx] = { ...state.accounts[idx], name, bank, type, balance };
-    showToast('Conta atualizada ✅', 'success');
-  } else {
-    state.accounts.push({ id: uid(), name, bank, type, balance });
-    state.balance += balance;
-    showToast('Conta criada! 🏦', 'success');
-  }
+  const payload = {
+    name,
+    bank: bank || null,
+    type,
+    balance,
+  };
 
-  saveState();
-  closeModal('modal-account');
-  document.getElementById('acc-name').value = '';
-  document.getElementById('acc-bank').value = '';
-  document.getElementById('acc-balance').value = '';
-  document.getElementById('acc-edit-id').value = '';
-  renderAccounts();
+  try {
+    let resp;
+    if (editId) {
+      resp = await apiPut(`/accounts/${editId}`, payload);
+      showToast('Conta atualizada ✅', 'success');
+    } else {
+      resp = await apiPost('/accounts', payload);
+      showToast('Conta criada! 🏦', 'success');
+    }
+
+    applyServerState(resp);
+    closeModal('modal-account');
+    document.getElementById('acc-name').value = '';
+    document.getElementById('acc-bank').value = '';
+    document.getElementById('acc-balance').value = '';
+    document.getElementById('acc-edit-id').value = '';
+  } catch (e) {
+    // Erro já exibido
+  }
 }
 
-function deleteAccount(id) {
+async function deleteAccount(id) {
   if (!confirm('Excluir esta conta?')) return;
-  state.accounts = state.accounts.filter(a => a.id !== id);
-  saveState();
-  showToast('Conta removida', 'info');
-  renderAccounts();
+
+  try {
+    const resp = await apiDelete(`/accounts/${id}`);
+    applyServerState(resp);
+    showToast('Conta removida', 'info');
+  } catch (e) {
+    // erro já exibido
+  }
+}
+
+function editAccount(id) {
+  const acc = state.accounts.find(a => a.id === id);
+  if (!acc) return;
+
+  openModal('modal-account');
+  setTimeout(() => {
+    document.getElementById('acc-edit-id').value = acc.id;
+    document.getElementById('acc-name').value = acc.name;
+    document.getElementById('acc-bank').value = acc.bank || '';
+    document.getElementById('acc-type').value = acc.type;
+    document.getElementById('acc-balance').value = fmt(acc.balance);
+  }, 50);
 }
 
 function renderAccounts() {
@@ -504,7 +785,10 @@ function renderAccounts() {
       <div class="account-balance">${fmt(a.balance)}</div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
         <div class="account-type">${a.type}</div>
-        <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteAccount('${a.id}')" style="color:var(--red)">🗑️</button>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="editAccount('${a.id}')" title="Editar">✏️</button>
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteAccount('${a.id}')" style="color:var(--red)" title="Excluir">🗑️</button>
+        </div>
       </div>
     </div>
   `).join('');
@@ -513,37 +797,76 @@ function renderAccounts() {
 // ============================================================
 // CATEGORIES
 // ============================================================
-function saveCategory() {
-  const name = document.getElementById('cat-name').value.trim();
-  const type = document.getElementById('cat-type-val').value;
-  const icon = document.getElementById('cat-icon').value || '💰';
-  const color = document.getElementById('cat-color').value || '#7c5cfc';
-  const editId = document.getElementById('cat-edit-id').value;
+async function saveCategory() {
+  const getVal = (id, def = '') => {
+    const el = document.getElementById(id);
+    return el ? el.value : def;
+  };
+
+  const name = getVal('cat-name', '').trim();
+  const type = getVal('cat-type-val', 'receita');
+  const icon = getVal('cat-icon', '💰');
+  const color = getVal('cat-color', '#7c5cfc');
+  const editId = getVal('cat-edit-id', '');
 
   if (!name) { showToast('Informe o nome da categoria', 'error'); return; }
 
-  if (editId) {
-    const idx = state.categories.findIndex(c => c.id === editId);
-    if (idx !== -1) state.categories[idx] = { ...state.categories[idx], name, type, icon, color };
-    showToast('Categoria atualizada ✅', 'success');
-  } else {
-    state.categories.push({ id: uid(), name, type, icon, color });
-    showToast('Categoria criada! 🏷️', 'success');
-  }
+  const payload = {
+    name,
+    type,
+    icon,
+    color,
+  };
 
-  saveState();
-  closeModal('modal-category');
-  document.getElementById('cat-name').value = '';
-  document.getElementById('cat-edit-id').value = '';
-  renderCategories();
+  try {
+    let resp;
+    if (editId) {
+      resp = await apiPut(`/categories/${editId}`, payload);
+      showToast('Categoria atualizada ✅', 'success');
+    } else {
+      resp = await apiPost('/categories', payload);
+      showToast('Categoria criada! 🏷️', 'success');
+    }
+
+    applyServerState(resp);
+    closeModal('modal-category');
+    document.getElementById('cat-name').value = '';
+    document.getElementById('cat-edit-id').value = '';
+  } catch (e) {
+    // Erro já exibido
+  }
 }
 
-function deleteCategory(id) {
+async function deleteCategory(id) {
   if (!confirm('Excluir esta categoria?')) return;
-  state.categories = state.categories.filter(c => c.id !== id);
-  saveState();
-  showToast('Categoria removida', 'info');
-  renderCategories();
+
+  try {
+    const resp = await apiDelete(`/categories/${id}`);
+    applyServerState(resp);
+    showToast('Categoria removida', 'info');
+  } catch (e) {
+    // erro já exibido
+  }
+}
+
+function editCategory(id) {
+  const cat = state.categories.find(c => c.id === id);
+  if (!cat) return;
+
+  openModal('modal-category');
+  setTimeout(() => {
+    document.getElementById('cat-edit-id').value = cat.id;
+    document.getElementById('cat-name').value = cat.name;
+    document.getElementById('cat-type-val').value = cat.type;
+
+    const btn = document.querySelector(`#modal-category .type-tab[onclick*="'${cat.type}'"]`);
+    if (btn && typeof setCatType === 'function') {
+      setCatType(cat.type, btn);
+    }
+
+    document.getElementById('cat-icon').value = cat.icon || '💰';
+    document.getElementById('cat-color').value = cat.color || '#7c5cfc';
+  }, 50);
 }
 
 function renderCategories() {
@@ -566,7 +889,8 @@ function renderCategories() {
       </div>
       <span class="badge ${typeClass[c.type] || 'badge-gray'}">${typeLabel[c.type] || c.type}</span>
       <div class="category-actions">
-        <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteCategory('${c.id}')" style="color:var(--red)">🗑️</button>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="editCategory('${c.id}')" title="Editar">✏️</button>
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteCategory('${c.id}')" style="color:var(--red)" title="Excluir">🗑️</button>
       </div>
     </div>`;
   }).join('');
@@ -575,52 +899,112 @@ function renderCategories() {
 // ============================================================
 // INVOICES
 // ============================================================
-function saveInvoice() {
+async function saveInvoice() {
   const desc = document.getElementById('invoice-desc').value.trim();
-  const amount = parseFloat(document.getElementById('invoice-amount').value);
+  const amount = parseMoney(document.getElementById('invoice-amount').value);
   const due = document.getElementById('invoice-due').value;
   const catId = document.getElementById('invoice-category').value;
   const status = document.getElementById('invoice-status').value;
+  const recurrence = document.getElementById('invoice-recurrence')?.value || 'none';
+  const installments = parseInt(document.getElementById('invoice-installments')?.value) || null;
+  const editId = document.getElementById('invoice-edit-id').value;
 
   if (!desc || !amount) { showToast('Preencha todos os campos', 'error'); return; }
 
-  state.invoices.push({ id: uid(), desc, amount, due, catId, status });
-  saveState();
-  closeModal('modal-invoice');
-  showToast('Fatura registrada 🧾', 'success');
-  renderInvoices();
+  try {
+    const payload = {
+      description: desc,
+      amount,
+      due_date: due,
+      status,
+      category_id: catId || null,
+      recurrence,
+      installments: recurrence === 'installment' ? installments : null,
+    };
+
+    let resp;
+    if (editId) {
+      resp = await apiPut(`/invoices/${editId}`, payload);
+      showToast('Fatura atualizada 🧾', 'success');
+    } else {
+      resp = await apiPost('/invoices', payload);
+      showToast('Fatura registrada 🧾', 'success');
+    }
+
+    applyServerState(resp);
+    closeModal('modal-invoice');
+    document.getElementById('invoice-desc').value = '';
+    document.getElementById('invoice-amount').value = '';
+    document.getElementById('invoice-due').value = new Date().toISOString().split('T')[0];
+    document.getElementById('invoice-status').value = 'pendente';
+    document.getElementById('invoice-edit-id').value = '';
+    const rec = document.getElementById('invoice-recurrence');
+    if (rec) rec.value = 'none';
+    const inst = document.getElementById('invoice-installments');
+    if (inst) inst.value = '2';
+    if (typeof toggleInstallments === 'function') toggleInstallments('invoice');
+  } catch (e) {
+    // Erro já exibido pelo apiPost/apiPut
+  }
 }
 
-function markInvoicePaid(id) {
+async function markInvoicePaid(id) {
   const inv = state.invoices.find(i => i.id === id);
   if (!inv) return;
-  inv.status = 'pago';
-  state.balance -= inv.amount;
-  state.transactions.unshift({
-    id: uid(),
-    desc: `Fatura: ${inv.desc}`,
-    amount: inv.amount,
-    date: new Date().toISOString().split('T')[0],
-    type: 'despesa',
-    catId: inv.catId,
-    accId: '',
-    note: 'Fatura paga',
-  });
-  saveState();
-  showToast('Fatura marcada como paga ✅', 'success');
-  renderInvoices();
-  renderDashboard();
+
+  try {
+    const resp = await apiPut(`/invoices/${id}`, {
+      description: inv.desc,
+      amount: inv.amount,
+      due_date: inv.due,
+      status: 'pago',
+      category_id: inv.catId || null,
+      recurrence: inv.recurrence || 'none',
+      installments: inv.installments || null,
+    });
+
+    applyServerState(resp);
+    showToast('Fatura marcada como paga ✅', 'success');
+  } catch (e) {
+    // erro exibido
+  }
 }
 
-function deleteInvoice(id) {
+async function deleteInvoice(id) {
   if (!confirm('Excluir esta fatura?')) return;
-  state.invoices = state.invoices.filter(i => i.id !== id);
-  saveState();
-  showToast('Fatura removida', 'info');
-  renderInvoices();
+
+  try {
+    const resp = await apiDelete(`/invoices/${id}`);
+    applyServerState(resp);
+    showToast('Fatura removida', 'info');
+  } catch (e) {
+    // erro exibido
+  }
+}
+
+function editInvoice(id) {
+  const inv = state.invoices.find(i => i.id === id);
+  if (!inv) return;
+
+  openModal('modal-invoice');
+  setTimeout(() => {
+    document.getElementById('invoice-edit-id').value = inv.id;
+    document.getElementById('invoice-desc').value = inv.desc;
+    document.getElementById('invoice-amount').value = fmt(inv.amount);
+    document.getElementById('invoice-due').value = inv.due || new Date().toISOString().split('T')[0];
+    document.getElementById('invoice-status').value = inv.status || 'pendente';
+    document.getElementById('invoice-category').value = inv.catId || '';
+
+    const rec = document.getElementById('invoice-recurrence');
+    if (rec) {
+      rec.value = 'none';
+      if (typeof toggleInstallments === 'function') toggleInstallments('invoice');
+    }
+  }, 50);
 }
 
 function renderInvoices() {
+  if (!document.getElementById('invoice-stats')) return;
   const invs = state.invoices || [];
   const pending = invs.filter(i => i.status === 'pendente');
   const overdue = invs.filter(i => i.status === 'atrasado');
@@ -655,6 +1039,7 @@ function renderInvoices() {
         <div class="invoice-status"><span class="badge ${statusBadge[inv.status]}">${statusLabel[inv.status]}</span></div>
       </div>
       <div style="display:flex;gap:6px;margin-left:8px">
+        <button class="btn btn-ghost btn-icon btn-sm" onclick="editInvoice('${inv.id}')" title="Editar">✏️</button>
         ${inv.status !== 'pago' ? `<button class="btn btn-green btn-sm" onclick="markInvoicePaid('${inv.id}')">Pagar</button>` : ''}
         <button class="btn btn-ghost btn-icon btn-sm" onclick="deleteInvoice('${inv.id}')" style="color:var(--red)">🗑️</button>
       </div>
@@ -666,6 +1051,7 @@ function renderInvoices() {
 // DASHBOARD
 // ============================================================
 function renderDashboard() {
+  if (!document.getElementById('dashboard-stats')) return;
   const txs = state.transactions || [];
   const totalReceita = txs.filter(t => t.type === 'receita').reduce((s, t) => s + t.amount, 0);
   const totalDespesa = txs.filter(t => t.type === 'despesa').reduce((s, t) => s + t.amount, 0);
@@ -742,8 +1128,25 @@ function renderDonutChart() {
   }
 
   const colors = ['#7c5cfc', '#22c98a', '#f04060', '#f5b942', '#3a9df8'];
-  let angle = 0;
   const cx = 70, cy = 70, r = 55, inner = 30;
+
+  // Caso especial: 1 categoria só (circulo completo)
+  if (items.length === 1) {
+    const item = items[0];
+    const col = item.color || colors[0];
+    const pct = total > 0 ? ((item.val / total) * 100).toFixed(0) : 0;
+    const legend = `<div class="donut-item"><div class="donut-dot" style="background:${col}"></div><span style="font-size:13px;color:var(--text2)">${item.icon} ${item.name}</span><span class="donut-pct">${pct}%</span></div>`;
+
+    document.getElementById('donut-chart-wrap').innerHTML = `
+      <svg class="donut-svg" width="140" height="140" viewBox="0 0 140 140">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${r - inner}" opacity="0.9" />
+      </svg>
+      <div class="donut-legend">${legend}</div>
+    `;
+    return;
+  }
+
+  let angle = 0;
   let paths = '';
   items.forEach((item, i) => {
     const pct = total > 0 ? item.val / total : 0;
@@ -776,7 +1179,17 @@ function renderDonutChart() {
 }
 
 function renderRecentTransactions() {
-  const txs = (state.transactions || []).slice(0, 5);
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  
+  const txs = (state.transactions || [])
+    .filter(t => {
+      const txDate = new Date(t.date + 'T00:00:00');
+      return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
+    })
+    .slice(0, 5);
+  
   const list = document.getElementById('recent-transactions-list');
   if (!txs.length) {
     list.innerHTML = `<div class="empty-state"><div class="empty-icon">↕️</div><div class="empty-desc">Nenhuma transação</div></div>`;
@@ -821,6 +1234,7 @@ function renderGoalsSummary() {
 // REPORTS
 // ============================================================
 function renderReports() {
+  if (!document.getElementById('report-chart-1')) return;
   const txs = state.transactions || [];
   const totalR = txs.filter(t => t.type === 'receita').reduce((s, t) => s + t.amount, 0);
   const totalD = txs.filter(t => t.type === 'despesa').reduce((s, t) => s + t.amount, 0);
@@ -865,10 +1279,21 @@ function renderReports() {
   if (!items.length) {
     donutEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-desc">Sem dados</div></div>';
   } else {
-    let angle = 0;
     const cx = 60, cy = 60, r = 48, inner = 24;
-    let paths = '';
+
+    // Special case: single category (draw full circle)
+    if (items.length === 1) {
+      const item = items[0];
+      const col = item.color || '#666';
+      const pct = total > 0 ? ((item.val / total) * 100).toFixed(0) : 0;
+      const legend = `<div class="donut-item"><div class="donut-dot" style="background:${col}"></div><span style="font-size:12px;color:var(--text2)">${item.icon} ${item.name}</span><span class="donut-pct">${pct}%</span></div>`;
+      wrapper.innerHTML = `<svg width="120" height="120" viewBox="0 0 120 120"><circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${r - inner}" opacity="0.9"/></svg><div class="donut-legend" style="font-size:12px">${legend}</div>`;
+      return;
+    }
+
+    let angle = 0;
     const colors = ['#7c5cfc', '#22c98a', '#f04060', '#f5b942', '#3a9df8'];
+    let paths = '';
     items.forEach((item, i) => {
       const pct = total > 0 ? item.val / total : 0;
       const s = angle, e = angle + pct * 2 * Math.PI;

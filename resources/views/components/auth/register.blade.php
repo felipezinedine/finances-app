@@ -48,7 +48,7 @@ new class extends Component
                 'message' => 'Login realizado com sucesso 🚀',
                 'type' => 'success'
             ]);
-            return redirect()->route('dashboard');
+            return redirect()->route('web.index');
         } else {
             $this->dispatch('toast', [
                 'message' => 'Ocorreu um erro ao criar a conta. Tente novamente.',

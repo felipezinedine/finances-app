@@ -36,13 +36,23 @@
       </button>
     </nav>
     <div class="sidebar-user">
-      <div class="user-card">
-        <div class="user-avatar" id="sidebar-avatar">JS</div>
-        <div>
-          <div class="user-name" id="sidebar-name">João Silva</div>
-          <div class="user-email" id="sidebar-email">joao@email.com</div>
-        </div>
-      </div>
-      <button class="btn btn-ghost btn-sm btn-full" style="margin-top:8px;color:var(--red)" onclick="logout()">⬅️ Sair</button>
+      @auth
+          <div class="user-card">
+            <div class="user-avatar" id="sidebar-avatar">{{ getInitialsUser() }}</div>
+            <div>
+              <div class="user-name" id="sidebar-name">{{ userName() }}</div>
+              <div class="user-email" id="sidebar-email">{{ userEmail() }}</div>
+            </div>
+          </div>
+      @else 
+          <div class="user-card">
+            <div class="user-avatar" id="sidebar-avatar">JS</div>
+            <div>
+              <div class="user-name" id="sidebar-name">João Silva</div>
+              <div class="user-email" id="sidebar-email">joao@email.com</div>
+            </div>
+          </div>
+      @endauth
+      <a class="btn btn-ghost btn-sm btn-full" style="margin-top:8px;color:var(--red)" href="{{ route('logout') }}">⬅️ Sair</a>
     </div>
   </aside>

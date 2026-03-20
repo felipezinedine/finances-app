@@ -20,7 +20,7 @@ class Investments extends Model
 
     public function history () 
     {
-        return $this->hasMany(InvestmentHistory::class);
+        return $this->hasMany(InvestmentHistory::class, 'investment_id');
     }
 
     // lucro / prejuizo calculado
